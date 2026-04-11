@@ -10,27 +10,37 @@ jobs:
     name: Default
 
   steps:
-
-  # Step 1: Checkout code
   - checkout: self
 
-  # Step 2: Confirm environment
   - script: |
-      echo "User:"
       whoami
-      echo "Working Directory:"
       pwd
-      echo "Files:"
       ls -la
-    displayName: "Check Agent Environment"
-
-  # Step 3: Verify Terraform
-  - script: |
       which terraform
       terraform --version
-    displayName: "Verify Terraform"
+    displayName: "Check Agent and Terraform"
 
-  # Step 4: Terraform Init
+  - script: |
+      cat > terraform.tfvars <<EOF
+      resource_group_name   = "rg-epicbook-capstone"
+      location              = "UK South"
+      vnet_name             = "vnet-epicbook"
+      frontend_subnet_name  = "frontend-subnet"
+      backend_subnet_name   = "backend-subnet"
+      frontend_vm_name      = "epicbook-frontend-vm"
+      backend_vm_name       = "epicbook-backend-vm"
+      admin_username        = "azureuser"
+      ssh_public_key_path   = "/home/sonny_h0b2ruu/.ssh/epicbook_azure_key.pub"
+      mysql_server_name     = "epicbookmysql123456"
+      mysql_admin_username  = "epicadmin"
+      mysql_admin_password  = "UseAStrongPassword123!"
+      mysql_database_name   = "bookstore"
+      EOF
+
+      echo "terraform.tfvars created"
+      cat terraform.tfvars
+    displayName: "Create terraform.tfvars"
+
   - task: AzureCLI@2
     displayName: "Terraform Init"
     inputs:
@@ -39,9 +49,9 @@ jobs:
       scriptLocation: inlineScript
       inlineScript: |
         cd $(System.DefaultWorkingDirectory)
+        export TF_INPUT=0
         terraform init
 
-  # Step 5: Terraform Validate
   - task: AzureCLI@2
     displayName: "Terraform Validate"
     inputs:
@@ -50,9 +60,9 @@ jobs:
       scriptLocation: inlineScript
       inlineScript: |
         cd $(System.DefaultWorkingDirectory)
+        export TF_INPUT=0
         terraform validate
 
-  # Step 6: Terraform Plan
   - task: AzureCLI@2
     displayName: "Terraform Plan"
     inputs:
@@ -61,9 +71,9 @@ jobs:
       scriptLocation: inlineScript
       inlineScript: |
         cd $(System.DefaultWorkingDirectory)
-        terraform plan -out=tfplan
+        export TF_INPUT=0
+        terraform plan -input=false -out=tfplan
 
-  # Step 7: Terraform Apply
   - task: AzureCLI@2
     displayName: "Terraform Apply"
     inputs:
@@ -72,9 +82,9 @@ jobs:
       scriptLocation: inlineScript
       inlineScript: |
         cd $(System.DefaultWorkingDirectory)
-        terraform apply -auto-approve tfplan
+        export TF_INPUT=0
+        terraform apply -input=false -auto-approve tfplan
 
-  # Step 8: Output values
   - task: AzureCLI@2
     displayName: "Terraform Outputs"
     inputs:
