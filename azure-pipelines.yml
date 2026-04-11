@@ -1,60 +1,86 @@
 trigger:
 - main
 
-pool:
-  name: Default
+jobs:
+- job: TerraformInfra
+  displayName: "Provision Infrastructure with Terraform"
+  timeoutInMinutes: 180
 
-steps:
-- script: |
-    sudo apt-get update
-    sudo apt-get install -y wget unzip
-    wget https://releases.hashicorp.com/terraform/1.8.5/terraform_1.8.5_linux_amd64.zip
-    unzip -o terraform_1.8.5_linux_amd64.zip
-    sudo mv terraform /usr/local/bin/
-    terraform --version
-  displayName: Install Terraform
+  pool:
+    name: Default
 
-- task: AzureCLI@2
-  displayName: Terraform Init
-  inputs:
-    azureSubscription: 'epicbook-azure-rm'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      terraform init
+  steps:
 
-- task: AzureCLI@2
-  displayName: Terraform Validate
-  inputs:
-    azureSubscription: 'epicbook-azure-rm'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      terraform validate
+  # Step 1: Checkout code
+  - checkout: self
 
-- task: AzureCLI@2
-  displayName: Terraform Plan
-  inputs:
-    azureSubscription: 'epicbook-azure-rm'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      terraform plan -out=tfplan
+  # Step 2: Confirm environment
+  - script: |
+      echo "User:"
+      whoami
+      echo "Working Directory:"
+      pwd
+      echo "Files:"
+      ls -la
+    displayName: "Check Agent Environment"
 
-- task: AzureCLI@2
-  displayName: Terraform Apply
-  inputs:
-    azureSubscription: 'epicbook-azure-rm'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      terraform apply -auto-approve tfplan
+  # Step 3: Verify Terraform
+  - script: |
+      which terraform
+      terraform --version
+    displayName: "Verify Terraform"
 
-- task: AzureCLI@2
-  displayName: Show Terraform Outputs
-  inputs:
-    azureSubscription: 'epicbook-azure-rm'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      terraform output
+  # Step 4: Terraform Init
+  - task: AzureCLI@2
+    displayName: "Terraform Init"
+    inputs:
+      azureSubscription: 'epicbook-azure-rm'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        cd $(System.DefaultWorkingDirectory)
+        terraform init
+
+  # Step 5: Terraform Validate
+  - task: AzureCLI@2
+    displayName: "Terraform Validate"
+    inputs:
+      azureSubscription: 'epicbook-azure-rm'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        cd $(System.DefaultWorkingDirectory)
+        terraform validate
+
+  # Step 6: Terraform Plan
+  - task: AzureCLI@2
+    displayName: "Terraform Plan"
+    inputs:
+      azureSubscription: 'epicbook-azure-rm'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        cd $(System.DefaultWorkingDirectory)
+        terraform plan -out=tfplan
+
+  # Step 7: Terraform Apply
+  - task: AzureCLI@2
+    displayName: "Terraform Apply"
+    inputs:
+      azureSubscription: 'epicbook-azure-rm'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        cd $(System.DefaultWorkingDirectory)
+        terraform apply -auto-approve tfplan
+
+  # Step 8: Output values
+  - task: AzureCLI@2
+    displayName: "Terraform Outputs"
+    inputs:
+      azureSubscription: 'epicbook-azure-rm'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        cd $(System.DefaultWorkingDirectory)
+        terraform output
