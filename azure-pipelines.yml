@@ -23,7 +23,7 @@ jobs:
   - script: |
       cat > terraform.tfvars <<EOF
       resource_group_name   = "rg-epicbook-capstone"
-      location              = "UK South"
+      location              = "West US 3"
       vnet_name             = "vnet-epicbook"
       frontend_subnet_name  = "frontend-subnet"
       backend_subnet_name   = "backend-subnet"
