@@ -30,7 +30,7 @@ jobs:
       frontend_vm_name      = "epicbook-frontend-vm"
       backend_vm_name       = "epicbook-backend-vm"
       admin_username        = "azureuser"
-      ssh_public_key_path   = "/home/sonny_h0b2ruu/.ssh/epicbook_azure_key.pub"
+      ssh_public_key_path   = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC9xShBhtf4P2p0rqLsOm1lVwNXLRGCIZtcDIuamwRKZqFYLOVY2bqjrWdLW+Ad13MSk/38XHoxfpSVLMScvNGsL/Z5rkTfbrTw7j7rcYi3nQrZnaw2CAPcqovkwyQA5DNb26ODMShPwPZpIfaB706MIcZYk35XCy2rmW+uI9IXTkghiwDTgrdiCuiu67sYW569sogJEsDpkELAfgRhN6CzjwH7vsxjdBn0uIMl3mkjrkay/L9XBsr+ROo34AFmwtaXkxefcD+BjADb/d6lxXSzvzImN/nzL5s32DYSOGmCXNCiBpLPOCYkEMwTygViqZOvnR8gI/A8QiVA8PI2tUsQtl98ws/JFN/B2QRgxzccj11lYD74iFMm4VX6xg+P4NXXs/IFXQCGieKsQm8CS6tSoHoKVjWRlqZZEcwmzNvrgI7dtBNYfDwPiyvIudUeyTquatWtdt5W7lMKN4vl6z54YlpWoSp8kSRuKEGzFUb7cs29eG/+yE7AD//Hc503ez5DlZZsCqn/4v+TA42mZuhy73w1hfK91tEgoD73KU1FXOBNGlrW/UvVJXYglymHYjLyGHPPvMFaeq9lThmE+QKXfBbIuaD7/ll8GD+ebXkxOTODqIKZ215cHsaKJ6PT4aJwRuN5DCIFucX2h/1SJWtWWJoZIVhXJrOcvqOgWdcLwQ== epicbook-azure-key"
       mysql_server_name     = "epicbookmysql123456"
       mysql_admin_username  = "epicadmin"
       mysql_admin_password  = "UseAStrongPassword123!"
