@@ -1,5 +1,11 @@
-trigger:
-- main
+trigger: none   # Run manually only — infra changes are intentional, not on every push
+
+parameters:
+- name: runApply
+  displayName: "Run terraform apply (uncheck for plan-only)"
+  type: boolean
+  default: true
+
 
 jobs:
 - job: TerraformInfra
@@ -154,6 +160,7 @@ jobs:
 
   - task: AzureCLI@2
     displayName: "Terraform Apply"
+    condition: and(succeeded(), eq('${{ parameters.runApply }}', 'true'))
     inputs:
       azureSubscription: 'epicbook-azure-rm'
       scriptType: bash
