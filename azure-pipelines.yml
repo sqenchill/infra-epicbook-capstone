@@ -48,21 +48,31 @@ jobs:
       scriptType: bash
       scriptLocation: inlineScript
       inlineScript: |
-        az group create \
-          --name rg-tfstate \
-          --location westus3 \
-          --output none 2>/dev/null || true
+        set -e
+        echo "Creating resource group rg-tfstate (idempotent)..."
+        az group create --name rg-tfstate --location westus3 --output none
+
+        echo "Creating storage account epicbooktfstate (idempotent)..."
         az storage account create \
           --name epicbooktfstate \
           --resource-group rg-tfstate \
           --location westus3 \
           --sku Standard_LRS \
-          --output none 2>/dev/null || true
+          --output none
+
+        echo "Retrieving storage account key..."
+        STORAGE_KEY=$(az storage account keys list \
+          --resource-group rg-tfstate \
+          --account-name epicbooktfstate \
+          --query '[0].value' -o tsv)
+
+        echo "Creating blob container tfstate (idempotent)..."
         az storage container create \
           --name tfstate \
           --account-name epicbooktfstate \
-          --auth-mode login \
-          --output none 2>/dev/null || true
+          --account-key "$STORAGE_KEY" \
+          --output none
+
         echo "Terraform state backend is ready"
 
   - task: AzureCLI@2
@@ -74,11 +84,19 @@ jobs:
       inlineScript: |
         cd $(System.DefaultWorkingDirectory)
         export TF_INPUT=0
+
         STORAGE_KEY=$(az storage account keys list \
           --resource-group rg-tfstate \
           --account-name epicbooktfstate \
           --query '[0].value' -o tsv)
-        terraform init -backend-config="access_key=$STORAGE_KEY"
+
+        if [ -z "$STORAGE_KEY" ]; then
+          echo "ERROR: Could not retrieve storage account key — backend creation may have failed."
+          exit 1
+        fi
+
+        export ARM_ACCESS_KEY="$STORAGE_KEY"
+        terraform init
 
   - task: AzureCLI@2
     displayName: "Terraform Validate"
