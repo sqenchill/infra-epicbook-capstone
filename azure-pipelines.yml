@@ -9,15 +9,17 @@ jobs:
   pool:
     name: Default
 
+  variables:
+    TF_STATE_SA: "tfstateepic27c8"
+    TF_STATE_RG: "rg-tfstate"
+    ARM_SUBSCRIPTION_ID: "c60727c8-5150-4385-98c6-96705d61a4d0"
+
   steps:
   - checkout: self
 
   - script: |
-      whoami
-      pwd
-      ls -la
-      which terraform
-      terraform --version
+      whoami && pwd && ls -la
+      which terraform && terraform --version
     displayName: "Check Agent and Terraform"
 
   - script: |
@@ -37,10 +39,11 @@ jobs:
       mysql_database_name   = "bookstore"
       TFEOF
       sed -i 's/^      //' terraform.tfvars
-      echo "=== terraform.tfvars ==="
-      cat terraform.tfvars
+      echo "=== terraform.tfvars ===" && cat terraform.tfvars
     displayName: "Create terraform.tfvars"
 
+  # ── Creates the storage account used by the azurerm backend.
+  #    addSpnToEnvironment is not needed here — only az CLI calls, no Terraform.
   - task: AzureCLI@2
     displayName: "Ensure Terraform State Backend"
     inputs:
@@ -49,60 +52,58 @@ jobs:
       scriptLocation: inlineScript
       inlineScript: |
         set -e
-        SA_NAME="tfstateepic27c8"
+        echo "Creating resource group $(TF_STATE_RG) (idempotent)..."
+        az group create --name $(TF_STATE_RG) --location westus3 --output none || true
 
-        echo "Creating resource group rg-tfstate (idempotent)..."
-        az group create --name rg-tfstate --location westus3 --output none || true
-
-        echo "Creating storage account $SA_NAME (idempotent)..."
+        echo "Creating storage account $(TF_STATE_SA) (idempotent)..."
         az storage account create \
-          --name "$SA_NAME" \
-          --resource-group rg-tfstate \
+          --name $(TF_STATE_SA) \
+          --resource-group $(TF_STATE_RG) \
           --location westus3 \
           --sku Standard_LRS \
           --output none || true
 
         echo "Retrieving storage account key..."
         STORAGE_KEY=$(az storage account keys list \
-          --resource-group rg-tfstate \
-          --account-name "$SA_NAME" \
+          --resource-group $(TF_STATE_RG) \
+          --account-name $(TF_STATE_SA) \
           --query '[0].value' -o tsv)
-
-        if [ -z "$STORAGE_KEY" ]; then
-          echo "ERROR: Could not retrieve storage key for $SA_NAME"
-          exit 1
-        fi
+        [ -z "$STORAGE_KEY" ] && { echo "ERROR: empty storage key"; exit 1; }
 
         echo "Creating blob container tfstate (idempotent)..."
         az storage container create \
           --name tfstate \
-          --account-name "$SA_NAME" \
+          --account-name $(TF_STATE_SA) \
           --account-key "$STORAGE_KEY" \
           --output none || true
 
-        echo "Terraform state backend is ready ($SA_NAME)"
+        echo "State backend ready: $(TF_STATE_SA)/tfstate"
 
+  # ── addSpnToEnvironment: true exposes $servicePrincipalId / $servicePrincipalKey / $tenantId
+  #    inside the script so we can map them to ARM_* vars that Terraform's azurerm
+  #    provider and backend both understand. Applied to every Terraform step below.
   - task: AzureCLI@2
     displayName: "Terraform Init"
     inputs:
       azureSubscription: 'epicbook-azure-rm'
       scriptType: bash
       scriptLocation: inlineScript
+      addSpnToEnvironment: true
       inlineScript: |
-        cd $(System.DefaultWorkingDirectory)
-        export TF_INPUT=0
+        export ARM_CLIENT_ID="$servicePrincipalId"
+        export ARM_CLIENT_SECRET="$servicePrincipalKey"
+        export ARM_TENANT_ID="$tenantId"
+        export ARM_SUBSCRIPTION_ID="$(ARM_SUBSCRIPTION_ID)"
 
         STORAGE_KEY=$(az storage account keys list \
-          --resource-group rg-tfstate \
-          --account-name tfstateepic27c8 \
+          --resource-group $(TF_STATE_RG) \
+          --account-name $(TF_STATE_SA) \
           --query '[0].value' -o tsv)
-
-        if [ -z "$STORAGE_KEY" ]; then
-          echo "ERROR: Could not retrieve storage account key — backend creation may have failed."
-          exit 1
-        fi
-
+        [ -z "$STORAGE_KEY" ] && { echo "ERROR: empty storage key"; exit 1; }
         export ARM_ACCESS_KEY="$STORAGE_KEY"
+
+        cd $(System.DefaultWorkingDirectory)
+        export TF_INPUT=0
         terraform init
 
   - task: AzureCLI@2
@@ -111,7 +112,19 @@ jobs:
       azureSubscription: 'epicbook-azure-rm'
       scriptType: bash
       scriptLocation: inlineScript
+      addSpnToEnvironment: true
       inlineScript: |
+        export ARM_CLIENT_ID="$servicePrincipalId"
+        export ARM_CLIENT_SECRET="$servicePrincipalKey"
+        export ARM_TENANT_ID="$tenantId"
+        export ARM_SUBSCRIPTION_ID="$(ARM_SUBSCRIPTION_ID)"
+
+        STORAGE_KEY=$(az storage account keys list \
+          --resource-group $(TF_STATE_RG) \
+          --account-name $(TF_STATE_SA) \
+          --query '[0].value' -o tsv)
+        export ARM_ACCESS_KEY="$STORAGE_KEY"
+
         cd $(System.DefaultWorkingDirectory)
         export TF_INPUT=0
         terraform validate
@@ -122,7 +135,19 @@ jobs:
       azureSubscription: 'epicbook-azure-rm'
       scriptType: bash
       scriptLocation: inlineScript
+      addSpnToEnvironment: true
       inlineScript: |
+        export ARM_CLIENT_ID="$servicePrincipalId"
+        export ARM_CLIENT_SECRET="$servicePrincipalKey"
+        export ARM_TENANT_ID="$tenantId"
+        export ARM_SUBSCRIPTION_ID="$(ARM_SUBSCRIPTION_ID)"
+
+        STORAGE_KEY=$(az storage account keys list \
+          --resource-group $(TF_STATE_RG) \
+          --account-name $(TF_STATE_SA) \
+          --query '[0].value' -o tsv)
+        export ARM_ACCESS_KEY="$STORAGE_KEY"
+
         cd $(System.DefaultWorkingDirectory)
         export TF_INPUT=0
         terraform plan -input=false -out=tfplan
@@ -133,7 +158,19 @@ jobs:
       azureSubscription: 'epicbook-azure-rm'
       scriptType: bash
       scriptLocation: inlineScript
+      addSpnToEnvironment: true
       inlineScript: |
+        export ARM_CLIENT_ID="$servicePrincipalId"
+        export ARM_CLIENT_SECRET="$servicePrincipalKey"
+        export ARM_TENANT_ID="$tenantId"
+        export ARM_SUBSCRIPTION_ID="$(ARM_SUBSCRIPTION_ID)"
+
+        STORAGE_KEY=$(az storage account keys list \
+          --resource-group $(TF_STATE_RG) \
+          --account-name $(TF_STATE_SA) \
+          --query '[0].value' -o tsv)
+        export ARM_ACCESS_KEY="$STORAGE_KEY"
+
         cd $(System.DefaultWorkingDirectory)
         export TF_INPUT=0
         terraform apply -input=false -auto-approve tfplan
@@ -144,7 +181,19 @@ jobs:
       azureSubscription: 'epicbook-azure-rm'
       scriptType: bash
       scriptLocation: inlineScript
+      addSpnToEnvironment: true
       inlineScript: |
+        export ARM_CLIENT_ID="$servicePrincipalId"
+        export ARM_CLIENT_SECRET="$servicePrincipalKey"
+        export ARM_TENANT_ID="$tenantId"
+        export ARM_SUBSCRIPTION_ID="$(ARM_SUBSCRIPTION_ID)"
+
+        STORAGE_KEY=$(az storage account keys list \
+          --resource-group $(TF_STATE_RG) \
+          --account-name $(TF_STATE_SA) \
+          --query '[0].value' -o tsv)
+        export ARM_ACCESS_KEY="$STORAGE_KEY"
+
         cd $(System.DefaultWorkingDirectory)
         echo "========================================================"
         echo "         INFRASTRUCTURE OUTPUTS — copy these values"
