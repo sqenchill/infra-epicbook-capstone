@@ -49,31 +49,38 @@ jobs:
       scriptLocation: inlineScript
       inlineScript: |
         set -e
-        echo "Creating resource group rg-tfstate (idempotent)..."
-        az group create --name rg-tfstate --location westus3 --output none
+        SA_NAME="tfstateepic27c8"
 
-        echo "Creating storage account epicbooktfstate (idempotent)..."
+        echo "Creating resource group rg-tfstate (idempotent)..."
+        az group create --name rg-tfstate --location westus3 --output none || true
+
+        echo "Creating storage account $SA_NAME (idempotent)..."
         az storage account create \
-          --name epicbooktfstate \
+          --name "$SA_NAME" \
           --resource-group rg-tfstate \
           --location westus3 \
           --sku Standard_LRS \
-          --output none
+          --output none || true
 
         echo "Retrieving storage account key..."
         STORAGE_KEY=$(az storage account keys list \
           --resource-group rg-tfstate \
-          --account-name epicbooktfstate \
+          --account-name "$SA_NAME" \
           --query '[0].value' -o tsv)
+
+        if [ -z "$STORAGE_KEY" ]; then
+          echo "ERROR: Could not retrieve storage key for $SA_NAME"
+          exit 1
+        fi
 
         echo "Creating blob container tfstate (idempotent)..."
         az storage container create \
           --name tfstate \
-          --account-name epicbooktfstate \
+          --account-name "$SA_NAME" \
           --account-key "$STORAGE_KEY" \
-          --output none
+          --output none || true
 
-        echo "Terraform state backend is ready"
+        echo "Terraform state backend is ready ($SA_NAME)"
 
   - task: AzureCLI@2
     displayName: "Terraform Init"
@@ -87,7 +94,7 @@ jobs:
 
         STORAGE_KEY=$(az storage account keys list \
           --resource-group rg-tfstate \
-          --account-name epicbooktfstate \
+          --account-name tfstateepic27c8 \
           --query '[0].value' -o tsv)
 
         if [ -z "$STORAGE_KEY" ]; then
