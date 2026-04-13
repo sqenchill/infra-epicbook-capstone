@@ -21,7 +21,7 @@ jobs:
     displayName: "Check Agent and Terraform"
 
   - script: |
-      cat > terraform.tfvars <<EOF
+      cat > terraform.tfvars <<'TFEOF'
       resource_group_name   = "rg-epicbook-capstone"
       location              = "West US 3"
       vnet_name             = "vnet-epicbook"
@@ -30,16 +30,40 @@ jobs:
       frontend_vm_name      = "epicbook-frontend-vm"
       backend_vm_name       = "epicbook-backend-vm"
       admin_username        = "azureuser"
-      ssh_public_key   = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC9xShBhtf4P2p0rqLsOm1lVwNXLRGCIZtcDIuamwRKZqFYLOVY2bqjrWdLW+Ad13MSk/38XHoxfpSVLMScvNGsL/Z5rkTfbrTw7j7rcYi3nQrZnaw2CAPcqovkwyQA5DNb26ODMShPwPZpIfaB706MIcZYk35XCy2rmW+uI9IXTkghiwDTgrdiCuiu67sYW569sogJEsDpkELAfgRhN6CzjwH7vsxjdBn0uIMl3mkjrkay/L9XBsr+ROo34AFmwtaXkxefcD+BjADb/d6lxXSzvzImN/nzL5s32DYSOGmCXNCiBpLPOCYkEMwTygViqZOvnR8gI/A8QiVA8PI2tUsQtl98ws/JFN/B2QRgxzccj11lYD74iFMm4VX6xg+P4NXXs/IFXQCGieKsQm8CS6tSoHoKVjWRlqZZEcwmzNvrgI7dtBNYfDwPiyvIudUeyTquatWtdt5W7lMKN4vl6z54YlpWoSp8kSRuKEGzFUb7cs29eG/+yE7AD//Hc503ez5DlZZsCqn/4v+TA42mZuhy73w1hfK91tEgoD73KU1FXOBNGlrW/UvVJXYglymHYjLyGHPPvMFaeq9lThmE+QKXfBbIuaD7/ll8GD+ebXkxOTODqIKZ215cHsaKJ6PT4aJwRuN5DCIFucX2h/1SJWtWWJoZIVhXJrOcvqOgWdcLwQ== epicbook-azure-key"
+      ssh_public_key        = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC9xShBhtf4P2p0rqLsOm1lVwNXLRGCIZtcDIuamwRKZqFYLOVY2bqjrWdLW+Ad13MSk/38XHoxfpSVLMScvNGsL/Z5rkTfbrTw7j7rcYi3nQrZnaw2CAPcqovkwyQA5DNb26ODMShPwPZpIfaB706MIcZYk35XCy2rmW+uI9IXTkghiwDTgrdiCuiu67sYW569sogJEsDpkELAfgRhN6CzjwH7vsxjdBn0uIMl3mkjrkay/L9XBsr+ROo34AFmwtaXkxefcD+BjADb/d6lxXSzvzImN/nzL5s32DYSOGmCXNCiBpLPOCYkEMwTygViqZOvnR8gI/A8QiVA8PI2tUsQtl98ws/JFN/B2QRgxzccj11lYD74iFMm4VX6xg+P4NXXs/IFXQCGieKsQm8CS6tSoHoKVjWRlqZZEcwmzNvrgI7dtBNYfDwPiyvIudUeyTquatWtdt5W7lMKN4vl6z54YlpWoSp8kSRuKEGzFUb7cs29eG/+yE7AD//Hc503ez5DlZZsCqn/4v+TA42mZuhy73w1hfK91tEgoD73KU1FXOBNGlrW/UvVJXYglymHYjLyGHPPvMFaeq9lThmE+QKXfBbIuaD7/ll8GD+ebXkxOTODqIKZ215cHsaKJ6PT4aJwRuN5DCIFucX2h/1SJWtWWJoZIVhXJrOcvqOgWdcLwQ== epicbook-azure-key"
       mysql_server_name     = "epicbookmysql123456"
       mysql_admin_username  = "epicadmin"
       mysql_admin_password  = "UseAStrongPassword123!"
       mysql_database_name   = "bookstore"
-      EOF
-
-      echo "terraform.tfvars created"
+      TFEOF
+      sed -i 's/^      //' terraform.tfvars
+      echo "=== terraform.tfvars ==="
       cat terraform.tfvars
     displayName: "Create terraform.tfvars"
+
+  - task: AzureCLI@2
+    displayName: "Ensure Terraform State Backend"
+    inputs:
+      azureSubscription: 'epicbook-azure-rm'
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        az group create \
+          --name rg-tfstate \
+          --location westus3 \
+          --output none 2>/dev/null || true
+        az storage account create \
+          --name epicbooktfstate \
+          --resource-group rg-tfstate \
+          --location westus3 \
+          --sku Standard_LRS \
+          --output none 2>/dev/null || true
+        az storage container create \
+          --name tfstate \
+          --account-name epicbooktfstate \
+          --auth-mode login \
+          --output none 2>/dev/null || true
+        echo "Terraform state backend is ready"
 
   - task: AzureCLI@2
     displayName: "Terraform Init"
@@ -50,7 +74,11 @@ jobs:
       inlineScript: |
         cd $(System.DefaultWorkingDirectory)
         export TF_INPUT=0
-        terraform init
+        STORAGE_KEY=$(az storage account keys list \
+          --resource-group rg-tfstate \
+          --account-name epicbooktfstate \
+          --query '[0].value' -o tsv)
+        terraform init -backend-config="access_key=$STORAGE_KEY"
 
   - task: AzureCLI@2
     displayName: "Terraform Validate"
@@ -93,4 +121,20 @@ jobs:
       scriptLocation: inlineScript
       inlineScript: |
         cd $(System.DefaultWorkingDirectory)
-        terraform output
+        echo "========================================================"
+        echo "         INFRASTRUCTURE OUTPUTS — copy these values"
+        echo "========================================================"
+        APP_IP=$(terraform output -raw app_public_ip)
+        BACKEND_PRIV=$(terraform output -raw backend_private_ip)
+        BACKEND_PUB=$(terraform output -raw backend_public_ip)
+        MYSQL=$(terraform output -raw mysql_fqdn)
+        echo "APP_PUBLIC_IP      : $APP_IP"
+        echo "BACKEND_PRIVATE_IP : $BACKEND_PRIV"
+        echo "BACKEND_PUBLIC_IP  : $BACKEND_PUB"
+        echo "MYSQL_FQDN         : $MYSQL"
+        echo "========================================================"
+        echo "Paste these into the App Pipeline variables before running it."
+        echo "##vso[task.setvariable variable=APP_PUBLIC_IP;isOutput=true]$APP_IP"
+        echo "##vso[task.setvariable variable=BACKEND_PRIVATE_IP;isOutput=true]$BACKEND_PRIV"
+        echo "##vso[task.setvariable variable=BACKEND_PUBLIC_IP;isOutput=true]$BACKEND_PUB"
+        echo "##vso[task.setvariable variable=MYSQL_FQDN;isOutput=true]$MYSQL"
